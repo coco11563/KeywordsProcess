@@ -44,7 +44,7 @@ object KeywordsProcess {
       }).collect().toMap
 
     val textBroadcast = sc.broadcast[Map[Hierarchy, (String, String)]](textMap)
-
+  // TODO 加入一个判断 是否历年未选择与新词filter
     tmpUpdateRdd.map(f => (new Hierarchy(f._4, f._3), f._1))
       .map(f => f._2.split(args(2))
         .map(str => (str, f._1)))
@@ -58,13 +58,11 @@ object KeywordsProcess {
       .map(f => (f._2._1, (f._1,f._2._2)))
       .groupByKey
       .map(p => {
-        new Keyword(p._1, p._2)
+//        new Keyword(p._1, p._2)
       }).map(k => {
-      k.applyText(textBroadcast.value)
+//      k.applyText(textBroadcast.value)
     })
   }
 
-  def weight (keywordCount : Int, abstractCount : Int, titleCount : Int) : Double = {
-    1.0 * keywordCount + 0.2 * abstractCount + 0.4 * titleCount
-  }
+
 }
