@@ -1,6 +1,6 @@
 package pub.sha0w.ETL.Objects
 
-class Hierarchy (val FOS: String, val ApplyID : String) {
+class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
   override def hashCode(): Int = {
     (FOS + ApplyID).##
   }
@@ -26,7 +26,7 @@ class Hierarchy (val FOS: String, val ApplyID : String) {
   }
 }
 
-class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) {
+class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends Serializable {
   override def hashCode(): Int = {
     (keyword + hierarchy.FOS + hierarchy.ApplyID).##
   }

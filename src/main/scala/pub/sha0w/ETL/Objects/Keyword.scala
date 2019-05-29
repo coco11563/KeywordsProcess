@@ -18,7 +18,7 @@ import pub.sha0w.ETL.Utils.StringUtils
   * @param beenSelected 去年是否被选中
   *
   */
-class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int)], val beenSelected : Boolean) {
+class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int)], val beenSelected  : Boolean = false) extends Serializable {
   val sq: Seq[(Hierarchy, Int)] = iterable.toSeq
   val amount : Int = sq.map(f=> f._2).sum
   //1. count 2. abstext 3. titletext
@@ -39,15 +39,15 @@ class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int)], val been
 
   def keywordFilter : Result = {
     val seq = hiMap.toSeq
-    val resultseq = if (beenSelected) { // 全新词
+    val resultseq = if (!beenSelected) { // 全新词
       seq.filter(pair => {
         pair._2.weight > 2.0 && pair._2.percentage > 0.7 && pair._2.count > 2
-      }).map(p => (p._1, "newword"))
+      }).map(p => (p._1, p._2,"newword"))
     }
     else { // 历年未被选择
       seq.filter(pair => {
         pair._2.weight > 6.0 && pair._2.count > 15 && pair._2.count < 55 && pair._2.percentage > 0.5
-      }).map(p => (p._1, "notbeenselectedlastyear"))
+      }).map(p => (p._1, p._2,"notbeenselectedlastyear"))
     }
     new Result(resultseq, name)
   }
