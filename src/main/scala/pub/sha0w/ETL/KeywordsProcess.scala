@@ -4,18 +4,54 @@ import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField, StructType}
 import org.apache.spark.{SparkConf, SparkContext}
+import org.slf4j.{Logger, LoggerFactory}
 import pub.sha0w.ETL.Objects.{Hierarchy, HierarchyKeyword, Keyword}
 
 object KeywordsProcess {
+  private val logger: Logger = LoggerFactory.getLogger(KeywordsProcess.getClass)
   def main(args: Array[String]): Unit = {
+    logger.info("这是一个定制化的组件，仅供处理关键字数据 \n" +
+      "为了处理关键字属性，该处理器需要输入6个参数并提供两张规范化的Hive表\n" +
+      "最后这个处理器会生成一张名为：middle.m_keyword_recommend的关键字推荐表\n" +
+      "并且会将生成的CSV输出到args(4)所标识的位置" +
+      "Hive表的Schema如下所示")
+    logger.info("table 申请书 : \n" +
+      "title_zh\tstring" +
+      "\ntitle_en\tstring" +
+      "\nkeyword_zh\tstringt" +
+      "\nkeyword_en\tstring" +
+      "\nabstract_zh\tstring" +
+      "\nabstract_en\tstring" +
+      "\napplyid\tstring" +
+      "\nresearch_field\tstring")
+    logger.info("table 历年关键字 : \n" +
+      "applyid\tstring" +
+      "\nresearch_field\tstring" +
+      "\nkeyword\tstring")
+    logger.info("规范化两张表的组成和字段后，还需要输入4个参数")
+    logger.info("参数一：申请书表名\n" +
+      "参数二：历年关键字表名\n" +
+      "参数三：历年关键字内，关键字keyword字段分隔字符\n" +
+      "参数四：今年申请书，关键字keyword_zh字段分隔字符\n" +
+      "参数五：输出CSV的位置（HDFS）\n" +
+      "参数六：Hive metastore")
+    logger.info("说明结束")
+    logger.info("输出spark环境变量\n")
+    System.setProperty("hive.metastore.uris", args(5)) //hivemetastore = thrift://packone123:9083
     val conf = new SparkConf()
       .setAppName("SpringerProcess")
       .set("spark.driver.maxResultSize","2g")
+    conf.getAll.foreach(pair => {
+      logger.info(pair._1 + ":" + pair._2 + "\n")
+    })
+    logger.info("输出系统环境变量\n")
+    sys.props.toArray.foreach(pair => {
+      logger.info(pair._1 + ":" + pair._2 + "\n")
+    })
     val sc = new SparkContext(conf)
     val hiveContext = new HiveContext(sc)
-
-    val lastYearUsed = hiveContext.read.table(args(0)) //origin.2019_provided_keyword
-    val thisYearUpdated = hiveContext.read.table(args(1)) //origin.2019_application
+    val thisYearUpdated = hiveContext.read.table(args(0)) //origin.2019_application
+    val lastYearUsed = hiveContext.read.table(args(1)) //origin.2019_provided_keyword
     val recently_schema = lastYearUsed.schema
     /**
       * should be
@@ -126,7 +162,7 @@ object KeywordsProcess {
     for (arr <- result_csv_array) {
       val filename = arr._1
       val value = Array("applyid,research_field,source,keyword,count,percentage,weight,title_f,abstract_f,keyword_f") ++ arr._2
-      sc.parallelize(value, 1).saveAsTextFile("/out/" + filename)
+      sc.parallelize(value, 1).saveAsTextFile(args(4) + filename) //"/out/"
     }
   }
 
