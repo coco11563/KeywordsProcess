@@ -54,4 +54,8 @@ class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends S
     s"keyword info => \n" +
       s"name : ${this.keyword} , FOS : ${this.hierarchy.FOS} , ApplyID : ${this.hierarchy.ApplyID}"
   }
+
+  def toSimpleHash : Int = {
+    (this.keyword + hierarchy.FOS).##
+  }
 }

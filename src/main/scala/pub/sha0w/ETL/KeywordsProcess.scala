@@ -6,6 +6,7 @@ import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructFi
 import org.apache.spark.{SparkConf, SparkContext}
 import org.slf4j.{Logger, LoggerFactory}
 import pub.sha0w.ETL.Objects.{Hierarchy, HierarchyKeyword, Keyword}
+import pub.sha0w.ETL.Utils.StringUtils
 
 object KeywordsProcess {
   private val logger: Logger = LoggerFactory.getLogger(KeywordsProcess.getClass)
@@ -18,7 +19,7 @@ object KeywordsProcess {
     logger.info("table 申请书 : \n" +
       "title_zh\tstring" +
       "\ntitle_en\tstring" +
-      "\nkeyword_zh\tstringt" +
+      "\nkeyword_zh\tstring" +
       "\nkeyword_en\tstring" +
       "\nabstract_zh\tstring" +
       "\nabstract_en\tstring" +
@@ -28,13 +29,14 @@ object KeywordsProcess {
       "applyid\tstring" +
       "\nresearch_field\tstring" +
       "\nkeyword\tstring")
-    logger.info("规范化两张表的组成和字段后，还需要输入4个参数")
+    logger.info("规范化两张表的组成和字段后，还需要输入7个参数")
     logger.info("参数一：申请书表名\n" +
       "参数二：历年关键字表名\n" +
       "参数三：历年关键字内，关键字keyword字段分隔字符\n" +
       "参数四：今年申请书，关键字keyword_zh字段分隔字符\n" +
       "参数五：输出CSV的位置（HDFS）\n" +
-      "参数六：Hive metastore")
+      "参数六：Hive metastore\n" +
+      "参数⑦：处理年份\n")
     logger.info("说明结束")
     logger.info("输出spark环境变量\n")
     System.setProperty("hive.metastore.uris", args(5)) //hivemetastore = thrift://packone123:9083
@@ -50,6 +52,7 @@ object KeywordsProcess {
     })
     val sc = new SparkContext(conf)
     val hiveContext = new HiveContext(sc)
+    val startTime = System.currentTimeMillis()
     val thisYearUpdated = hiveContext.read.table(args(0)) //origin.2019_application
     val lastYearUsed = hiveContext.read.table(args(1)) //origin.2019_provided_keyword
     val recently_schema = lastYearUsed.schema
@@ -65,7 +68,7 @@ object KeywordsProcess {
     val recently = lastYearUsed.rdd.map(R => (R.getAs[String](recently_schema.fieldIndex("APPLYID")),
       R.getAs[String](recently_schema.fieldIndex("research_field".toUpperCase())),
       R.getAs[String](recently_schema.fieldIndex("keyword".toUpperCase))))
-      .map(f => {(f._1, f._2, f._3.split(args(2)))}) //args(2) : ","
+      .map(f => {(f._1, f._2, StringUtils.totalSplit(f._3))}) //args(2) : ","
       .map(f => {f._3.map(a => (f._1, f._2, a))}).flatMap(a => a)
       .map(r => {
       new HierarchyKeyword(r._3, new Hierarchy(r._2, r._1))
@@ -107,14 +110,17 @@ object KeywordsProcess {
 
     val textBroadcast = sc.broadcast[Map[Hierarchy, (String, String)]](textMap)
     //args(3) = ；
-    val result_mid_rdd = tmpUpdateRdd.map(f => (new Hierarchy(f._4, f._3), f._1)).map(f => f._2.split(args(3)).map(str => (str, f._1))).flatMap(f => f).map(f => (f._2, f._1)).filter(f => {
+    val result_mid_rdd = tmpUpdateRdd.map(f =>
+      (new Hierarchy(f._4, f._3), f._1)).map(
+      f => StringUtils.totalSplit(f._2).map(str => (str, f._1))).flatMap(f => f).map(
+      f => (f._2, f._1)).filter(f => {
         recentlyFilter(new HierarchyKeyword(f._2, f._1))
       })
     println("新关键词总数为 : " + result_mid_rdd.count())
 
     val result_rdd = result_mid_rdd.groupByKey.mapValues(strs => {
         val sq = strs.toSeq
-        (sq.head,sq.length)
+        (sq.head, sq.length)
       }).map(f => (f._2._1, (f._1,f._2._2))).groupByKey.map(p => {
         new Keyword(p._1, p._2)
       }).map(k => {
@@ -141,29 +147,31 @@ object KeywordsProcess {
       * |-- abstract_f: integer (nullable = false)
       * |-- keyword_f: integer (nullable = false)
       */
-    result_df.write.mode(SaveMode.Overwrite).saveAsTable("middle.m_keyword_recommend")
-    val result_csv_array = result_rdd.repartition(1).map(r => { (r.getAs[String](0).substring(0, 1) ,
-      r.getAs[String](0).replaceAll(",", " ") +
-      "," + {
-        val ret = r.getAs[String](1)
-        if (ret == null) null else {
-          ret.replaceAll(",", " ")
-        }
-      } +
-      "," + r.getAs[String](2).replaceAll(",", " ") +
-      "," + r.getAs[String](3).replaceAll(",", " ") +
-      "," + r.getAs[Int](4) +
-      "," + r.getAs[Double](5) +
-      "," + r.getAs[Double](6) +
-      "," + r.getAs[Int](7) +
-      "," + r.getAs[Int](8) +
-      "," + r.getAs[Int](9))
-    }).groupByKey().collect()
-    for (arr <- result_csv_array) {
-      val filename = arr._1
-      val value = Array("applyid,research_field,source,keyword,count,percentage,weight,title_f,abstract_f,keyword_f") ++ arr._2
-      sc.parallelize(value, 1).saveAsTextFile(args(4) + filename) //"/out/"
-    }
+    result_df.write.mode(SaveMode.Overwrite).saveAsTable(s"middle.m_${args(6)}_keyword_recommend")
+
+    println("处理共使用时间：" + (System.currentTimeMillis() - startTime))
+//    val result_csv_array = result_rdd.repartition(1).map(r => { (r.getAs[String](0).substring(0, 1) ,
+//      r.getAs[String](0).replaceAll(",", " ") +
+//      "," + {
+//        val ret = r.getAs[String](1)
+//        if (ret == null) null else {
+//          ret.replaceAll(",", " ")
+//        }
+//      } +
+//      "," + r.getAs[String](2).replaceAll(",", " ") +
+//      "," + r.getAs[String](3).replaceAll(",", " ") +
+//      "," + r.getAs[Int](4) +
+//      "," + r.getAs[Double](5) +
+//      "," + r.getAs[Double](6) +
+//      "," + r.getAs[Int](7) +
+//      "," + r.getAs[Int](8) +
+//      "," + r.getAs[Int](9))
+//    }).groupByKey().collect()
+//    for (arr <- result_csv_array) {
+//      val filename = arr._1
+//      val value = Array("applyid,research_field,source,keyword,count,percentage,weight,title_f,abstract_f,keyword_f") ++ arr._2
+//      sc.parallelize(value, 1).saveAsTextFile(args(4) + filename) //"/out/"
+//    }
   }
 
 

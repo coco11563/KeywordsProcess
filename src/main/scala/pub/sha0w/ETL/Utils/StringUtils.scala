@@ -28,7 +28,21 @@ object StringUtils {
     }
     count
   }
-
+  def totalSplit(A : String) : Array[String] = {
+    Array(A).flatMap(str => {
+      if (str.contains("；")) str.split("；")
+      else Array(str)
+    }).flatMap(str => {
+      if (str.contains(";")) str.split(";")
+      else Array(str)
+    }).flatMap(str => {
+      if (str.contains(",")) str.split(",")
+      else Array(str)
+    }).flatMap(str => {
+      if (str.contains("，")) str.split("，")
+      else Array(str)
+    })
+  }
   def main(args: Array[String]): Unit = {
     val count1 = System.currentTimeMillis()
     for (i <- 0 to 100000) {
