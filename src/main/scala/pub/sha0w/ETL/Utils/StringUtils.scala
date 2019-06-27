@@ -8,6 +8,8 @@ object StringUtils {
     * @return B在A中出现的次数
     */
   def countString (A : String, B : String) : Int = {
+    if (A == null) return 0
+    if (B == null) return 0
     val lenA = A.length
     val lenB = B.length
     var count = 0
@@ -20,6 +22,7 @@ object StringUtils {
         flagB += 1
       } else {
         flagA += 1
+        flagB = 0
       }
       if (flagB == lenB) {
         flagB = 0

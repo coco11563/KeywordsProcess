@@ -15,18 +15,18 @@ import pub.sha0w.ETL.Utils.StringUtils
   *
   * @param name
   * @param iterable
-  * @param beenSelected 去年是否被选中
   *
   */
-class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int)], val beenSelected  : Boolean = false) extends Serializable {
-  val sq: Seq[(Hierarchy, Int)] = iterable.toSeq
+class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int, Boolean)]) extends Serializable {
+  val sq: Iterable[(Hierarchy, Int, Boolean)] = iterable.toSeq
   val amount : Int = sq.map(f=> f._2).sum
   //1. count 2. abstext 3. titletext
   var hiMap : Map[Hierarchy, KeywordStatus] = sq.map(f => {
-    (f._1, new KeywordStatus(f._2, 0, 0, amount, beenSelected))
+    (f._1, new KeywordStatus(f._2, 0, 0, amount, f._3))
   }).toMap
 
   // TODO 如果你想训练数据呢？
+  // _1 ab
   def applyText (set: Map[Hierarchy, (String, String)]) : Unit = {
     for (pair <- hiMap) {
       hiMap = hiMap.updated(pair._1, {
@@ -39,13 +39,10 @@ class Keyword(val name : String, iterable : Iterable[(Hierarchy, Int)], val been
 
   def keywordFilter : Result = {
     val seq = hiMap.toSeq
-    val resultseq = if (!beenSelected) { // 全新词
-      seq.filter(pair => {
+    val resultseq = { // 全新词
+      seq.filter(p => p._2.isNewWord).filter(pair => {
         pair._2.weight > 2.0 && pair._2.percentage > 0.7 && pair._2.count > 2
-      }).map(p => (p._1, p._2,"newword"))
-    }
-    else { // 历年未被选择
-      seq.filter(pair => {
+      }).map(p => (p._1, p._2,"newword")) ++ seq.filter(p => !p._2.isNewWord).filter(pair => {
         pair._2.weight > 6.0 && pair._2.count > 15 && pair._2.count < 55 && pair._2.percentage > 0.5
       }).map(p => (p._1, p._2,"notbeenselectedlastyear"))
     }

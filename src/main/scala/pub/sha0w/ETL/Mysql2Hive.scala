@@ -21,7 +21,7 @@ object Mysql2Hive {
     property.put("user","root")
     property.put("password", "Bigdata,1234")
     property.put("driver","com.mysql.cj.jdbc.Driver")
-    val mysql = sqlContext.read.format("jdbc").jdbc("jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB","2017_APPLICATION_NEW", property)
-    hiveContext.createDataFrame(mysql.rdd, mysql.schema).write.mode(SaveMode.Overwrite).format("orc").saveAsTable("origin.2017_application")
+    val mysql = sqlContext.read.format("jdbc").jdbc("jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB",args(0) + "_APPLICATION_NEW", property)
+    hiveContext.createDataFrame(mysql.rdd, mysql.schema).write.mode(SaveMode.Overwrite).format("orc").saveAsTable("origin." + args(0) +"_application")
   }
 }

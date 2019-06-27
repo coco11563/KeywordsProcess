@@ -67,10 +67,10 @@ object KeywordsProcess {
 
     val recently = lastYearUsed.rdd.map(R => (R.getAs[String](recently_schema.fieldIndex("APPLYID")),
       R.getAs[String](recently_schema.fieldIndex("research_field".toUpperCase())),
-      R.getAs[String](recently_schema.fieldIndex("keyword".toUpperCase))))
-      .map(f => {(f._1, f._2, StringUtils.totalSplit(f._3))}) //args(2) : ","
-      .map(f => {f._3.map(a => (f._1, f._2, a))}).flatMap(a => a)
-      .map(r => {
+      R.getAs[String](recently_schema.fieldIndex("keyword".toUpperCase)))).
+      map(f => {(f._1, f._2, StringUtils.totalSplit(f._3))}). //args(2) : ","
+       map(f => {f._3.map(a => (f._1, f._2, a))}).flatMap(a => a).
+      map(r => {
       new HierarchyKeyword(r._3, new Hierarchy(r._2, r._1))
     }).collect().toSet
     val recentlyBroadcast = sc.broadcast[Set[HierarchyKeyword]](recently)
@@ -101,8 +101,8 @@ object KeywordsProcess {
     }) // 244272 枚关键词
     //abs title
     val textMap: Map[Hierarchy, (String, String)] = tmpUpdateRdd.map(line => {
-      (new Hierarchy(line._4, line._3), (line._5, line._2))
-    }).groupByKey.mapValues(f => {
+      (new Hierarchy(line._4, line._3), (line._5, line._2))  //fos,applyid | abs,title
+    }).groupByKey.mapValues(f => { // group together
         f.reduce((pair_a, pair_b) => {
           (pair_a._1 + " " + pair_b._1, pair_a._2 + " " + pair_b._2)
         })
@@ -111,17 +111,18 @@ object KeywordsProcess {
     val textBroadcast = sc.broadcast[Map[Hierarchy, (String, String)]](textMap)
     //args(3) = ；
     val result_mid_rdd = tmpUpdateRdd.map(f =>
-      (new Hierarchy(f._4, f._3), f._1)).map(
+      (new Hierarchy(f._4, f._3), f._1)).map( //f._1 is keyword
       f => StringUtils.totalSplit(f._2).map(str => (str, f._1))).flatMap(f => f).map(
-      f => (f._2, f._1)).filter(f => {
-        recentlyFilter(new HierarchyKeyword(f._2, f._1))
-      })
+      f => (f._2, f._1)).map(f => new HierarchyKeyword(f._2, f._1)).groupBy(f => f).map(f => (f._1, f._2.size)).filter(f => {
+        recentlyFilter(f._1)
+      }).map((h: (HierarchyKeyword, Int)) => {(h._1.hierarchy, (h._1.keyword, h._2))})
     println("新关键词总数为 : " + result_mid_rdd.count())
 
-    val result_rdd = result_mid_rdd.groupByKey.mapValues(strs => {
-        val sq = strs.toSeq
-        (sq.head, sq.length)
-      }).map(f => (f._2._1, (f._1,f._2._2))).groupByKey.map(p => {
+    val result_rdd = result_mid_rdd.groupByKey.map((strs: (Hierarchy, Iterable[(String,Int)])) => {
+        val sq = strs._2.toSeq
+        sq.map(a => (strs._1, a)) // should be the count of keyword
+//        (sq.head, sq.length) //bugs find
+      }).flatMap(f => f).map((f: (Hierarchy, (String, Int))) => (f._2._1, (f._1,f._2._2, true))).groupByKey.map(p => {
         new Keyword(p._1, p._2)
       }).map(k => {
       k.applyText(textBroadcast.value)

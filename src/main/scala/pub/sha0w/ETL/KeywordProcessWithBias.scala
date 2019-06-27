@@ -131,24 +131,26 @@ object KeywordProcessWithBias {
       .map(f => StringUtils.totalSplit(f._2)
         .map(str => (str, f._1)))
       .flatMap(f => f)
-      .map(f => (f._2, f._1, new HierarchyKeyword(f._1, f._2)))
-      .filter(f => {
-      recentlyFilter(f._3)
-    })
-      .map(f => {(f._1, (f._2, tyblyRDDSetBroadcast.value.contains(f._3)))})
+      .map(f => new HierarchyKeyword(f._1, f._2))
+      .groupBy(f => f).map(f => (f._1, f._2.size)).filter(f => {
+      recentlyFilter(f._1)
+    }).map((f: (HierarchyKeyword, Int)) => {(f._1.hierarchy, (f._1.keyword, f._2, !tyblyRDDSetBroadcast.value.contains(f._1)))})
     println("新关键词总数为 : " + result_mid_rdd.count())
 
-    val result_rdd = result_mid_rdd.groupByKey.mapValues(strs => {
-      val sq = strs.toSeq
-      (sq.head,sq.length)
-    }).map(f => (f._2._1, (f._1,f._2._2))).groupByKey.map(p => {
-      new Keyword(p._1._1, p._2, p._1._2)
+    val result_rdd = result_mid_rdd.groupByKey.map((strs: (Hierarchy, Iterable[(String, Int, Boolean)])) => {
+      val sq = strs._2.toSeq
+      sq.map(a => (strs._1, a))
+    }).flatMap(f => f).map((f: (Hierarchy, (String, Int, Boolean))) => (f._2._1, (f._1, f._2._2, f._2._3)))
+      .groupByKey.map((p: (String, Iterable[(Hierarchy, Int, Boolean)])) => {
+      new Keyword(p._1, p._2)
     }).map(k => {
       k.applyText(textBroadcast.value)
       k.keywordFilter
     }).map(r => {
       r.print
     }).flatMap(a => a).map(t => Row.fromTuple(t))
+
+
     val result_schema = StructType(Array(StructField("applyid",StringType, nullable = true),
       StructField("research_field",StringType, nullable = true),
       StructField("source",StringType, nullable = true),StructField("keyword",StringType, nullable = false),StructField("count",IntegerType, nullable = false),StructField("percentage",DoubleType, nullable = false),StructField("weight",DoubleType, nullable = false)

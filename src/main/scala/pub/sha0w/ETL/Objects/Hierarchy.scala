@@ -1,8 +1,20 @@
 package pub.sha0w.ETL.Objects
 
+/**
+  * Here are four common pitfalls2
+  * that can cause inconsistent behavior when
+  * overriding equals:
+  * 1. Defining equals with the wrong signature.
+  * 2. Changing equals without also changing hashCode.
+  * 3. Defining equals in terms of mutable fields.
+  * 4. Failing to define equals as an equivalence relation.
+  *
+  * @param FOS
+  * @param ApplyID
+  */
 class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
   override def hashCode(): Int = {
-    (FOS + ApplyID).##
+    (FOS + ApplyID).hashCode
   }
 
   override def equals(obj: Any): Boolean = {
@@ -28,7 +40,7 @@ class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
 
 class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends Serializable {
   override def hashCode(): Int = {
-    (keyword + hierarchy.FOS + hierarchy.ApplyID).##
+    (keyword + hierarchy.FOS + hierarchy.ApplyID).hashCode
   }
 
   override def equals(obj: Any): Boolean = {
@@ -56,6 +68,6 @@ class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends S
   }
 
   def toSimpleHash : Int = {
-    (this.keyword + hierarchy.FOS).##
+    (this.keyword + hierarchy.FOS).hashCode
   }
 }
