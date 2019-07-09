@@ -113,7 +113,8 @@ object KeywordsProcess {
     val result_mid_rdd = tmpUpdateRdd.map(f =>
       (new Hierarchy(f._4, f._3), f._1)).map( //f._1 is keyword
       f => StringUtils.totalSplit(f._2).map(str => (str, f._1))).flatMap(f => f).map(
-      f => (f._2, f._1)).map(f => new HierarchyKeyword(f._2, f._1)).groupBy(f => f).map(f => (f._1, f._2.size)).filter(f => {
+      f => (f._2, f._1)).map(f => new HierarchyKeyword(f._2, f._1)).groupBy(f => f).
+      map(f => (f._1, f._2.size)).filter(f => {
         recentlyFilter(f._1)
       }).map((h: (HierarchyKeyword, Int)) => {(h._1.hierarchy, (h._1.keyword, h._2))})
     println("新关键词总数为 : " + result_mid_rdd.count())
@@ -122,7 +123,8 @@ object KeywordsProcess {
         val sq = strs._2.toSeq
         sq.map(a => (strs._1, a)) // should be the count of keyword
 //        (sq.head, sq.length) //bugs find
-      }).flatMap(f => f).map((f: (Hierarchy, (String, Int))) => (f._2._1, (f._1,f._2._2, true))).groupByKey.map(p => {
+      }).flatMap(f => f).map((f: (Hierarchy, (String, Int))) =>
+      (f._2._1, (f._1,f._2._2, true))).groupByKey.map(p => {
         new Keyword(p._1, p._2)
       }).map(k => {
       k.applyText(textBroadcast.value)
