@@ -65,9 +65,9 @@ object KeywordsProcess {
       */
     recently_schema.printTreeString()
 
-    val recently = lastYearUsed.rdd.map(R => (R.getAs[String](recently_schema.fieldIndex("APPLYID")),
-      R.getAs[String](recently_schema.fieldIndex("research_field".toUpperCase())),
-      R.getAs[String](recently_schema.fieldIndex("keyword".toUpperCase)))).
+    val recently = lastYearUsed.rdd.map(R => (R.getAs[String](fieldIndex(recently_schema,"applyid")),
+      R.getAs[String](fieldIndex(recently_schema,"research_field")),
+      R.getAs[String](fieldIndex(recently_schema,"keyword")))).
       map(f => {(f._1, f._2, StringUtils.totalSplit(f._3))}). //args(2) : ","
        map(f => {f._3.map(a => (f._1, f._2, a))}).flatMap(a => a).
       map(r => {
@@ -93,9 +93,9 @@ object KeywordsProcess {
       */
     thisYearUpdated_schema.printTreeString()
     val tmpUpdateRdd = thisYearUpdated.rdd.map(r => {
-        (r.getAs[String](thisYearUpdated_schema.fieldIndex("keyword_zh".toUpperCase)), r.getAs[String](thisYearUpdated_schema.fieldIndex("title_zh".toUpperCase)),
-        r.getAs[String](thisYearUpdated_schema.fieldIndex("applyid".toUpperCase)), r.getAs[String](thisYearUpdated_schema.fieldIndex("research_field".toUpperCase)),
-        r.getAs[String](thisYearUpdated_schema.fieldIndex("abstract_zh".toUpperCase)))
+        (r.getAs[String](fieldIndex(thisYearUpdated_schema,"keyword_zh".toUpperCase)), r.getAs[String](fieldIndex(thisYearUpdated_schema,"title_zh".toUpperCase)),
+        r.getAs[String](fieldIndex(thisYearUpdated_schema,"applyid".toUpperCase)), r.getAs[String](fieldIndex(thisYearUpdated_schema,"research_field".toUpperCase)),
+        r.getAs[String](fieldIndex(thisYearUpdated_schema,"abstract_zh".toUpperCase)))
       }).filter(tu => {
       tu._1 != null
     }) // 244272 枚关键词
@@ -176,6 +176,8 @@ object KeywordsProcess {
 //      sc.parallelize(value, 1).saveAsTextFile(args(4) + filename) //"/out/"
 //    }
   }
-
-
+  def fieldIndex (schema : StructType, fieldName : String) : Int = {
+    val fields = schema.fields.map(s => s.name).map(s => s.toLowerCase).toIndexedSeq
+    fields.indexOf(fieldName.toLowerCase)
+  }
 }

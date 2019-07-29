@@ -5,6 +5,7 @@ import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField, StructType}
 import org.slf4j.{Logger, LoggerFactory}
+import pub.sha0w.ETL.KeywordsProcess.fieldIndex
 import pub.sha0w.ETL.Objects.{Hierarchy, HierarchyKeyword, Keyword}
 import pub.sha0w.ETL.Utils.StringUtils
 import pub.sha0w.xls.Object.KeywordSheet
@@ -82,9 +83,9 @@ object KeywordProcessWithBias {
 
     val tyblyRDDSetBroadcast = sc.broadcast[Set[HierarchyKeyword]](tyblyRDDSet)
 
-    val recently = lastYearUsed.rdd.map(R => (R.getAs[String](recently_schema.fieldIndex("APPLYID")),
-      R.getAs[String](recently_schema.fieldIndex("research_field".toUpperCase())),
-      R.getAs[String](recently_schema.fieldIndex("keyword".toUpperCase))))
+    val recently = lastYearUsed.rdd.map(R => (R.getAs[String](fieldIndex(recently_schema,"APPLYID")),
+      R.getAs[String](fieldIndex(recently_schema,"research_field".toUpperCase())),
+      R.getAs[String](fieldIndex(recently_schema,"keyword".toUpperCase))))
       .map(f => {(f._1, f._2, StringUtils.totalSplit(f._3))}) //args(2) : ","
       .map(f => {f._3.map(a => (f._1, f._2, a))}).flatMap(a => a)
       .map(r => {
@@ -110,9 +111,9 @@ object KeywordProcessWithBias {
       */
     thisYearUpdated_schema.printTreeString()
     val tmpUpdateRdd = thisYearUpdated.rdd.map(r => {
-      (r.getAs[String](thisYearUpdated_schema.fieldIndex("keyword_zh".toUpperCase)), r.getAs[String](thisYearUpdated_schema.fieldIndex("title_zh".toUpperCase)),
-        r.getAs[String](thisYearUpdated_schema.fieldIndex("applyid".toUpperCase)), r.getAs[String](thisYearUpdated_schema.fieldIndex("research_field".toUpperCase)),
-        r.getAs[String](thisYearUpdated_schema.fieldIndex("abstract_zh".toUpperCase)))
+      (r.getAs[String](fieldIndex(thisYearUpdated_schema,"keyword_zh".toUpperCase)), r.getAs[String](fieldIndex(thisYearUpdated_schema,"title_zh".toUpperCase)),
+        r.getAs[String](fieldIndex(thisYearUpdated_schema,"applyid".toUpperCase)), r.getAs[String](fieldIndex(thisYearUpdated_schema,"research_field".toUpperCase)),
+        r.getAs[String](fieldIndex(thisYearUpdated_schema,"abstract_zh".toUpperCase)))
     }).filter(tu => {
       tu._1 != null
     }) // 244272 枚关键词

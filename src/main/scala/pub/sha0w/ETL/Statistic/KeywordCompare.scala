@@ -6,6 +6,7 @@ import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.slf4j.{Logger, LoggerFactory}
 import pub.sha0w.ETL.KeywordProcessWithBias
+import pub.sha0w.ETL.KeywordsProcess.fieldIndex
 import pub.sha0w.ETL.Objects.{Hierarchy, HierarchyKeyword}
 import pub.sha0w.xls.Object.KeywordSheet
 
@@ -46,9 +47,9 @@ object KeywordCompare {
     val schema1 = table1.schema
 
     val table1Set: Set[Int] = table1.rdd.map(r => {(
-      r.getAs[String](schema1.fieldIndex("applyid".toUpperCase)),
-      r.getAs[String](schema1.fieldIndex("research_field".toUpperCase)),
-      r.getAs[String](schema1.fieldIndex("keyword".toUpperCase))
+      r.getAs[String](fieldIndex(schema1,"applyid".toUpperCase)),
+      r.getAs[String](fieldIndex(schema1,"research_field".toUpperCase)),
+      r.getAs[String](fieldIndex(schema1,"keyword".toUpperCase))
     )}).map(tuple => {
       new KeywordSheet(tuple._1, tuple._2, tuple._3).li
     }).flatMap(a => a).map(k => {(k.applyid, k.researchField, k.name)}).map(r => {
@@ -62,9 +63,9 @@ object KeywordCompare {
     val schema3 = table3.schema
 
     val table3RDD = table3.rdd.map(r => {(
-      r.getAs[String](schema3.fieldIndex("applyid")),
-      r.getAs[String](schema3.fieldIndex("research_field")),
-      r.getAs[String](schema3.fieldIndex("keyword"))
+      r.getAs[String](fieldIndex(schema3,"applyid")),
+      r.getAs[String](fieldIndex(schema3,"research_field")),
+      r.getAs[String](fieldIndex(schema3,"keyword"))
     )}).map(tuple => {
       new KeywordSheet(tuple._1, tuple._2, tuple._3).li
     }).flatMap(a => a).map(k => {(k.applyid, k.researchField, k.name)}).map(r => {
