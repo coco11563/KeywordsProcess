@@ -13,6 +13,7 @@ package pub.sha0w.ETL.Objects
   * @param ApplyID
   */
 class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
+  assert(ApplyID != null, s"this hierarchy's apply id is null, illegal form, fos is $FOS")
   override def hashCode(): Int = {
     (FOS + ApplyID).hashCode
   }
@@ -33,6 +34,9 @@ class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
     new Hierarchy(FOS, ApplyID)
   }
 
+  def isNullAtFos : Boolean ={
+    FOS == null
+  }
   override def toString: String = {
     s"FOS : $FOS , ApplyID : $ApplyID"
   }
@@ -42,7 +46,7 @@ class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends S
   override def hashCode(): Int = {
     (keyword + hierarchy.FOS + hierarchy.ApplyID).hashCode
   }
-
+  def hasROS : Boolean = hierarchy.isNullAtFos
   override def equals(obj: Any): Boolean = {
     if (obj == null) false
     else {

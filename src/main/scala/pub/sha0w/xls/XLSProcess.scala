@@ -3,10 +3,10 @@ package pub.sha0w.xls
 import java.io.File
 
 import org.apache.poi.ss.usermodel.{Row, Sheet, Workbook}
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.sql.{SQLContext, SaveMode, Row => SparkRow}
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{SQLContext, SaveMode, Row => SparkRow}
+import org.apache.spark.{SparkConf, SparkContext}
 import pub.sha0w.xls.Object.{Keyword, KeywordSheet}
 import pub.sha0w.xls.Utils.XLS
 

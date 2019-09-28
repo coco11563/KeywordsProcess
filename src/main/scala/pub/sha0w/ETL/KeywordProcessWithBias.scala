@@ -67,6 +67,7 @@ object KeywordProcessWithBias {
       * |-- KEYWORD: string (nullable = true)
       */
     recently_schema.printTreeString()
+    // 去年推荐的关键字
     val theYearBeforeLastYear = hiveContext.read.table(args(7))
     val theyblySchema = theYearBeforeLastYear.schema
     val tyblyRDDSet: Set[HierarchyKeyword] = theYearBeforeLastYear.rdd.map(r => {(
@@ -82,7 +83,7 @@ object KeywordProcessWithBias {
       }).collect().toSet
 
     val tyblyRDDSetBroadcast = sc.broadcast[Set[HierarchyKeyword]](tyblyRDDSet)
-
+    //去年的关键字 origin.2019_provided_keyword // 这部分也需要进行关键词统计
     val recently = lastYearUsed.rdd.map(R => (R.getAs[String](fieldIndex(recently_schema,"APPLYID")),
       R.getAs[String](fieldIndex(recently_schema,"research_field".toUpperCase())),
       R.getAs[String](fieldIndex(recently_schema,"keyword".toUpperCase))))
@@ -115,9 +116,9 @@ object KeywordProcessWithBias {
         r.getAs[String](fieldIndex(thisYearUpdated_schema,"applyid".toUpperCase)), r.getAs[String](fieldIndex(thisYearUpdated_schema,"research_field".toUpperCase)),
         r.getAs[String](fieldIndex(thisYearUpdated_schema,"abstract_zh".toUpperCase)))
     }).filter(tu => {
-      tu._1 != null
+      tu._1 != null //存在中文关键字
     }) // 244272 枚关键词
-    //abs title
+    //abs title  <- a key-value pair with hierarchy(applyid rs) as key and the (abs, title) combination as value
     val textMap: Map[Hierarchy, (String, String)] = tmpUpdateRdd.map(line => {
       (new Hierarchy(line._4, line._3), (line._5, line._2))
     }).groupByKey.mapValues(f => {
@@ -125,23 +126,29 @@ object KeywordProcessWithBias {
         (pair_a._1 + " " + pair_b._1, pair_a._2 + " " + pair_b._2)
       })
     }).collect().toMap
-
+    // this k-v map
     val textBroadcast = sc.broadcast[Map[Hierarchy, (String, String)]](textMap)
     //args(3) = ；
+    //f._4 = rs , f._3 = applyid
+    // order the keywords with hierarchy structure
     val result_mid_rdd = tmpUpdateRdd.map(f => (new Hierarchy(f._4, f._3), f._1))
-      .map(f => StringUtils.totalSplit(f._2)
-        .map(str => (str, f._1)))
+      .map(f => StringUtils.totalSplit(f._2) // split the keyword
+        .map(str => (str, f._1))) // keyword - hierarchy
       .flatMap(f => f)
+      // f => hK(k,h)
       .map(f => new HierarchyKeyword(f._1, f._2))
       .groupBy(f => f).map(f => (f._1, f._2.size)).filter(f => {
       recentlyFilter(f._1)
-    }).map((f: (HierarchyKeyword, Int)) => {(f._1.hierarchy, (f._1.keyword, f._2, !tyblyRDDSetBroadcast.value.contains(f._1)))})
+    }).
+      // HK, num => H ,(k, num at this research field,  true for last year not contain , false for last year contain)
+      map((f: (HierarchyKeyword, Int)) => {(f._1.hierarchy, (f._1.keyword, f._2, !tyblyRDDSetBroadcast.value.contains(f._1)))})
     println("新关键词总数为 : " + result_mid_rdd.count())
 
     val result_rdd = result_mid_rdd.groupByKey.map((strs: (Hierarchy, Iterable[(String, Int, Boolean)])) => {
       val sq = strs._2.toSeq
       sq.map(a => (strs._1, a))
     }).flatMap(f => f).map((f: (Hierarchy, (String, Int, Boolean))) => (f._2._1, (f._1, f._2._2, f._2._3)))
+      //group by hierarchy gain keyword in all count
       .groupByKey.map((p: (String, Iterable[(Hierarchy, Int, Boolean)])) => {
       new Keyword(p._1, p._2)
     }).map(k => {
