@@ -2,13 +2,15 @@ name := "KeywordsProcess"
 
 version := "0.1"
 
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.5"
+
+// https://mvnrepository.com/artifact/org.apache.spark/spark-core
 
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" % "spark-core_2.10" % "1.6.3",
-  "org.apache.spark" % "spark-sql_2.10" % "1.6.3",
-  "org.apache.spark" % "spark-hive_2.10" % "1.6.3",
+  "org.apache.spark" %% "spark-core" % "2.2.0",
+  "org.apache.spark" %% "spark-sql" % "2.2.0",
+  "org.apache.spark" %% "spark-hive" % "2.2.0",
 // https://mvnrepository.com/artifact/mysql/mysql-connector-java
   "mysql" % "mysql-connector-java" % "8.0.16"
 )

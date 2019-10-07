@@ -29,24 +29,25 @@ object KeywordProcessWithBiasModified {
     val newApplication = hiveContext.read.table(args(0)) //origin.2019_application
     val oldKeyword = hiveContext.read.table(args(1)) //origin.2019_provided_keyword
     val recently_schema = oldKeyword.schema
-    val lastYearRecommand = hiveContext.read.table(args(3))
-
-    val lastYearRecSchema = lastYearRecommand.schema
-    //middle.m_recommand_keyword_2018
-    //这部分得到去年推荐的关键字数据
-    val lastYearRecSet: Set[HierarchyKeyword] = lastYearRecommand.rdd.map(r => {(
-      r.getAs[String](lastYearRecSchema.fieldIndex("applyid")),
-      r.getAs[String](lastYearRecSchema.fieldIndex("research_field")),
-      r.getAs[String](lastYearRecSchema.fieldIndex("keyword"))
-    )}).map(tuple => {
-      new KeywordSheet(tuple._1, tuple._2, tuple._3).li
-    }).flatMap(a => a)
-      .map(k => {(k.applyid, k.researchField, k.name)})
-      .map(r => {
-        new HierarchyKeyword(r._3, new Hierarchy(r._2, r._1))
-      }).collect().toSet
-
-
+    val lastYearRecSet: Set[HierarchyKeyword] = if (args(3) != "none") {
+      val lastYearRecommand = hiveContext.read.table(args(3))
+      val lastYearRecSchema = lastYearRecommand.schema
+      //middle.m_recommand_keyword_2018
+      //这部分得到去年推荐的关键字数据
+      lastYearRecommand.rdd.map(r => {(
+        r.getAs[String](lastYearRecSchema.fieldIndex("applyid")),
+        r.getAs[String](lastYearRecSchema.fieldIndex("research_field")),
+        r.getAs[String](lastYearRecSchema.fieldIndex("keyword"))
+      )}).map(tuple => {
+        new KeywordSheet(tuple._1, tuple._2, tuple._3).li
+      }).flatMap(a => a)
+        .map(k => {(k.applyid, k.researchField, k.name)})
+        .map(r => {
+          new HierarchyKeyword(r._3, new Hierarchy(r._2, r._1))
+        }).collect().toSet
+    } else {
+      Set()
+    }
     val lastYearRecSetBroadcast = sc.broadcast[Set[HierarchyKeyword]](lastYearRecSet)
     //得到去年使用的关键字数据
     val oldKeywordSet = oldKeyword.rdd.map(R => (R.getAs[String](fieldIndex(recently_schema,"APPLYID")),
