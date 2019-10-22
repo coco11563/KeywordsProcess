@@ -15,6 +15,7 @@ package pub.sha0w.ETL.Objects
 class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
   assert(ApplyID != null, s"this hierarchy's apply id is null, illegal form, fos is $FOS")
   override def hashCode(): Int = {
+    if (FOS == null) ApplyID.hashCode else
     (FOS + ApplyID).hashCode
   }
 
@@ -25,7 +26,9 @@ class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
         false
       } else {
         val tmp = obj.asInstanceOf[Hierarchy]
-        if (tmp.ApplyID == this.ApplyID && tmp.FOS == this.FOS) true else false
+        if (tmp.FOS == null && this.FOS == null) {
+          if (tmp.ApplyID == this.ApplyID) true else false
+        } else if (tmp.ApplyID == this.ApplyID && tmp.FOS == this.FOS) true else false
       }
     }
   }
@@ -44,7 +47,9 @@ class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
 
 class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends Serializable {
   override def hashCode(): Int = {
-    (keyword + hierarchy.FOS + hierarchy.ApplyID).hashCode
+    if (hierarchy.ApplyID == null) {
+      (keyword + hierarchy.ApplyID).hashCode
+    } else (keyword + hierarchy.FOS + hierarchy.ApplyID).hashCode
   }
   def hasROS : Boolean = hierarchy.isNullAtFos
   override def equals(obj: Any): Boolean = {
@@ -54,8 +59,7 @@ class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends S
         false
       } else {
         val tmp = obj.asInstanceOf[HierarchyKeyword]
-        if (tmp.hierarchy.ApplyID == this.hierarchy.ApplyID &&
-          tmp.hierarchy.FOS == this.hierarchy.FOS &&
+        if (tmp.hierarchy.equals( this.hierarchy) &&
         tmp.keyword == this.keyword ) true
         else false
       }

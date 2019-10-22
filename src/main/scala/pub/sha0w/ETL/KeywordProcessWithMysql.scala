@@ -25,6 +25,7 @@ object KeywordProcessWithMysql {
   private val logger: Logger = LoggerFactory.getLogger(KeywordProcessWithBiasModified.getClass)
 
   def main(args: Array[String]): Unit = {
+
     val spark = SparkSession.builder
       .getOrCreate()
     val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
@@ -95,7 +96,8 @@ object KeywordProcessWithMysql {
         r.getAs[String](fieldIndex(newAppschema,"abstract_zh".toUpperCase)))
     }).filter(tu => {
       tu._1 != null  && tu._3 != null //存在中文关键字
-    }) // 244272 枚关键词
+    })
+    // 244272 枚关键词
     //构建基于学科代码的层次语料库
 
     // 归并关键字到最末级代码
@@ -114,16 +116,31 @@ object KeywordProcessWithMysql {
     //        keywordApplyMap(keyword).add(applyid)
     //      }
     //    }
+    val hierarchyKeywordMap = newAppRdd.map(line => {
+      //new hierarchy(ros, applyid) : tuple(abs, title, keyword)
+      line._1.split("；").map(str =>  (new Hierarchy(line._4, line._3), str ))
+    }).flatMap(f => f).map(pair => {(new HierarchyKeyword(pair._2, pair._1), pair)}).reduceByKey((a, _) => a)
+      .values.groupByKey().map(f => {
+      (f._1, f._2.toList.map(str => new HierarchyKeyword(str, f._1)))
+    }).collect().toMap
+    val hierarchyKeywordMapBroadcast = spark.sparkContext.broadcast[Map[Hierarchy, List[HierarchyKeyword]]](hierarchyKeywordMap)
 
-    val newAppCorpusMap: Map[Hierarchy, (String, String, String)] = newAppRdd.map(line => {
+    val newAppCorpusMap: Map[Hierarchy, (Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])] = newAppRdd.map(line => {
       //new hierarchy(ros, applyid) : tuple(abs, title, keyword)
       (new Hierarchy(line._4, line._3), (line._5, line._2, line._1))
     }).groupByKey.mapValues(f => {
       f.reduce((pair_a, pair_b) => {
         (pair_a._1 + " " + pair_b._1, pair_a._2 + " " + pair_b._2, pair_a._3 + " " + pair_b._3 )
       })
+    }).map(f => {
+      val keys = hierarchyKeywordMapBroadcast.value.getOrElse(f._1, List())
+      (f._1, (
+        StringUtils.maximumWordCount(keys, f._2._1),
+        StringUtils.maximumWordCount(keys, f._2._2) ,
+        StringUtils.maximumWordCount(keys, f._2._3)))
     }).collect().toMap
-    val newAppCorpusMapBroadcast = spark.sparkContext.broadcast[Map[Hierarchy, (String, String, String)]](newAppCorpusMap)
+
+    val newAppCorpusMapBroadcast = spark.sparkContext.broadcast[Map[Hierarchy, (Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])]](newAppCorpusMap)
 
     //args(3) = ；
     //f._4 = rs , f._3 = applyid
@@ -152,27 +169,37 @@ object KeywordProcessWithMysql {
 
     println("新关键词总数为 : " + result_mid_rdd.count())
     // 这部分modified
-    /**
-      * 1、先通过applyid 进行group ， 获取相应学部下的关键词情况
-      * 2、对于每一个学部group 进行内部计算
-      *   - 1 group by 每一个ros
-      *   - 2 对于每个ros内的关键词统计（keyword, keywordcount, islastyear）
-      *     (1) 统计这个hierarchy（ros,app）下的title count\ abs count
-      * 3、对于学部group 计算各关键词出现数量，并broad到每一个ros级别关键词中
-      * 4、利用算法规则进行过滤，并将不存在研究方向的过滤到另外一个rdd中
-      * 5、组织并输出到Hive中
-      * 最终输出形式
-      * （末级代码、研究领域、关键词、是否新词[这个必是新词]， 学部下总频次， 研究方向下总频次，
-      * 学部下关键词中出现频次， 研究方向下关键词中出现频次，
-      * 学部下标题中出现频次 ， 研究方向下标题中出现频次）
-      * 这封装成一个</函数>，以方便去年使用的旧词的情况统计
-      */
-    val result: RDD[Row] = hierarchicalKeyworAnalysis(result_mid_rdd, newAppCorpusMapBroadcast)
+
 
     val oldHierarchy = oldKeyword.rdd.map(r => (r.getAs[String]("applyid".toUpperCase), r.getAs[String]("research_field".toUpperCase)
       ,r.getAs[String]("keyword".toUpperCase)))
       .map(p => new HierarchyKeyword(p._3, new Hierarchy(p._2, p._1)))
-    val oldResult = oldHierarchicalKeyworAnalysis(oldHierarchy, newAppCorpusMapBroadcast)
+
+    val oldWordCountMap = oldHierarchy.map(hk => {
+      (hk.hierarchy, 1) //研究领域下关键词数量
+    }).reduceByKey(_ + _).collect().toMap
+    val oldWordCountMapBroadcast = spark.sparkContext.broadcast[Map[Hierarchy, Int]](oldWordCountMap)
+
+
+    val oldResult: RDD[Row] = oldHierarchicalKeyworAnalysis(oldHierarchy, newAppCorpusMapBroadcast)
+
+    /**
+     * 1、先通过applyid 进行group ， 获取相应学部下的关键词情况
+     * 2、对于每一个学部group 进行内部计算
+     *   - 1 group by 每一个ros
+     *   - 2 对于每个ros内的关键词统计（keyword, keywordcount, islastyear）
+     *     (1) 统计这个hierarchy（ros,app）下的title count\ abs count
+     * 3、对于学部group 计算各关键词出现数量，并broad到每一个ros级别关键词中
+     * 4、利用算法规则进行过滤，并将不存在研究方向的过滤到另外一个rdd中
+     * 5、组织并输出到Hive中
+     * 最终输出形式
+     * （末级代码、研究领域、关键词、是否新词[这个必是新词]， 学部下总频次， 研究方向下总频次，
+     * 学部下关键词中出现频次， 研究方向下关键词中出现频次，
+     * 学部下标题中出现频次 ， 研究方向下标题中出现频次）
+     * 这封装成一个</函数>，以方便去年使用的旧词的情况统计
+     */
+//    val result: RDD[Row] = hierarchicalKeyworAnalysis(result_mid_rdd, newAppCorpusMapBroadcast)
+    val result: RDD[Row] = hierarchicalKeyworAnalysis(result_mid_rdd, newAppCorpusMapBroadcast, oldWordCountMapBroadcast)
     spark.createDataFrame(result,result_schema)
       .write.
       mode(SaveMode.Overwrite)
@@ -191,11 +218,12 @@ object KeywordProcessWithMysql {
     StructField("研究方向下总频次",IntegerType, nullable = false),
     StructField("学部下关键词中出现频次",IntegerType, nullable = false),
     StructField("研究方向下关键词中出现频次",IntegerType, nullable = false),
-    StructField("是否需要补充到上级",BooleanType, nullable = false)
+    StructField("是否需要补充到上级",IntegerType, nullable = false)
   ))
 
   def hierarchicalKeyworAnalysis (sourceData : RDD[(HierarchyKeyword, Int, Boolean)],
-                                  corpusMap : Broadcast[Map[Hierarchy, (String, String, String)]]) : RDD[(Row)] = {
+                                  corpusMap : Broadcast[Map[Hierarchy, (Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])]]
+                                 ) : RDD[(Row)] = {
     sourceData.map((pair: (HierarchyKeyword, Int, Boolean)) => {
       (pair._1.hierarchy.ApplyID.charAt(0), pair)
     }).groupByKey() // 依照学科代码进行group
@@ -204,17 +232,18 @@ object KeywordProcessWithMysql {
           //(abs : title)
           val text = corpusMap.value(hk._1.hierarchy)
           val abs = text._1
-          val title = text._2
+          val title: Map[HierarchyKeyword, Int] = text._2
           val keyword = hk._1.keyword
-          val abs_f = StringUtils.countString(abs, keyword)
-          val title_f = StringUtils.countString(title, keyword)
+          //
+          val abs_f = abs.getOrElse(hk._1, 0)
+          val title_f = title.getOrElse(hk._1, 0)
           // keyword, hierarchy, abstract_f, title_f, keyword_f, isnew
           (keyword, hk._1, abs_f, title_f, hk._2, hk._3)
         })
-          .groupBy(f => f._1).mapValues(f => {
+          .groupBy(f =>  f._1).mapValues(f => {
           val abs_f_all: Int = f.map(_._3).sum
           val title_f_all: Int = f.map(_._4).sum
-          val keyword_f_all: Int = f.map(_._4).sum
+          val keyword_f_all: Int = f.map(_._5).sum
           f.map(tu => {
             //            abstract_f 3, title_f 4, keyword_f 5, absall 6 , titleall 7, keywordall 8
             (tu._1, tu._2, tu._3, tu._4, tu._5, abs_f_all, title_f_all, keyword_f_all, tu._6)
@@ -223,43 +252,81 @@ object KeywordProcessWithMysql {
           .flatMap(f => f._2)
           .toSeq //return Seq[(String, String, String, Boolean, Int, Int, Int, Int)] =
       }).flatMap(f => f)
-      .filter(f => keywordFilter(
+      .map(f => (keywordFilter(
         f._9,
-        weight(f._3,f._4, f._5),
-        if ( (f._6 + f._7 + f._8)  == 0) 0 else (f._3 + f._4 + f._5)/ (f._6 + f._7 + f._8),
-        f._3 + f._4 + f._5)
-      )
-      .map(f => (
-        f._2.hierarchy.ApplyID, // apply id
-        f._2.hierarchy.FOS, // ros
-        if(f._9) "是" else "去年未采纳",  // is new word
-        f._1,  // keyword
-        f._6 + f._7 + f._8, // all keyword's appearance
-        f._3 + f._4 + f._5, // this field keyword's appearance
-        f._8,  // keyword appearance in keyword filed where in this applyid
-        f._5,  // keyword appearance in keyword field where in this ros
-        f._2.hierarchy.FOS == null
-      ))
-      .map(tu => (Row.fromTuple(tu)))
+        weight(f._3,f._4,f._5),
+        if ( (f._6 + f._7 + f._8)  == 0) 0 else (f._3 + f._4 + f._5) / (f._6 + f._7 + f._8),
+        f._3 + f._4 + f._5), f))
+      .map(f =>
+      {
+        if (f._1) { // 如果过了阈值
+          (
+            f._2._2.hierarchy.ApplyID, // apply id
+            f._2._2.hierarchy.FOS, // ros
+            if (f._2._9) "是" else "去年未采纳", // is new word
+            f._2._1, // keyword
+            f._2._6 + f._2._7 + f._2._8, // all keyword's appearance
+            f._2._3 + f._2._4 + f._2._5, // this field keyword's appearance
+            f._2._8, // keyword appearance in keyword filed where in this applyid
+            f._2._5, // keyword appearance in keyword field where in this ros
+            // chosen? true for chosen one else 1 for choose -1 for to upper 0 for delete
+            1
+          )
+        }
+        else
+        {
+          val all = f._2._6 + f._2._7 + f._2._8
+          val this_all = f._2._3 + f._2._4 + f._2._5
+          if ((this_all + 0.0) / (all + 0.0) > 0.5 && this_all > 0) {
+            (
+              f._2._2.hierarchy.ApplyID, // apply id
+              f._2._2.hierarchy.FOS, // ros
+              if (f._2._9) "是" else "去年未采纳", // is new word
+              f._2._1, // keyword
+              f._2._6 + f._2._7 + f._2._8, // all keyword's appearance
+              f._2._3 + f._2._4 + f._2._5, // this field keyword's appearance
+              f._2._8, // keyword appearance in keyword filed where in this applyid
+              f._2._5, // keyword appearance in keyword field where in this ros
+              // chosen? true for chosen one else
+              -1
+            )
+          } else {
+            (
+              f._2._2.hierarchy.ApplyID, // apply id
+              f._2._2.hierarchy.FOS, // ros
+              if (f._2._9) "是" else "去年未采纳", // is new word
+              f._2._1, // keyword
+              f._2._6 + f._2._7 + f._2._8, // all keyword's appearance
+              f._2._3 + f._2._4 + f._2._5, // this field keyword's appearance
+              f._2._8, // keyword appearance in keyword filed where in this applyid
+              f._2._5, // keyword appearance in keyword field where in this ros
+              // chosen? true for chosen one else
+              0
+            )
+          }
+        }
+      })
+      .filter(r => r._9 != 0)
+      .map(tu => Row.fromTuple(tu))
   }
 
 
   def oldHierarchicalKeyworAnalysis (sourceData : RDD[(HierarchyKeyword)],
-                                     corpusMap : Broadcast[Map[Hierarchy, (String, String, String)]]) : RDD[Row] = {
+                                     corpusMap : Broadcast[Map[Hierarchy,(Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])]]) : RDD[Row] = {
     sourceData.map((pair: (HierarchyKeyword)) => {
       (pair.hierarchy.ApplyID.charAt(0), pair)
     }).groupByKey() // 依照学科代码进行group
       .map(pair => {
         pair._2.toSeq.map(hk => {
           //(abs : title)
-          val text = corpusMap.value.getOrElse(hk.hierarchy, ("", "", "")) // 如果因为applyid 修改导致这里取不到 则___
+          val text = corpusMap.value.getOrElse(hk.hierarchy, (Map[HierarchyKeyword, Int](), Map[HierarchyKeyword, Int](), Map[HierarchyKeyword, Int]())) // 如果因为applyid 修改导致这里取不到 则___
           val keywords = text._3
           val abs = text._1
           val title = text._2
           val keyword = hk.keyword
-          val abs_f = StringUtils.countString(abs, keyword)
-          val title_f = StringUtils.countString(title, keyword)
-          val keyword_f = StringUtils.countString(keywords, keyword)
+          val abs_f: Int = abs.getOrElse(hk, 0)
+          val title_f: Int = title.getOrElse(hk, 0)
+          val keyword_f: Int = keywords.getOrElse(hk, 0)
           // keyword, hierarchy, abstract_f, title_f, keyword_f, isnew
           (keyword, hk, abs_f, title_f, keyword_f, "否")
         })
@@ -282,12 +349,11 @@ object KeywordProcessWithMysql {
             f._3 + f._4 + f._5, // this field keyword's appearance
             f._8,  // keyword appearance in keyword filed where in this applyid
             f._5,  // keyword appearance in keyword field where in this ros
-            false
+            2
           )).toSeq //return Seq[(String, String, String, Boolean, Int, Int, Int, Int)] =
       }).flatMap(f => f)
       .map(tu => Row.fromTuple(tu))
   }
-
 
   def keywordFilter (isNewWord : Boolean, weight : Double, percentage : Double, count : Int) : Boolean ={
     if (isNewWord) {
@@ -299,4 +365,161 @@ object KeywordProcessWithMysql {
   def weight (keywordCount : Int, abstractCount : Int, titleCount : Int) : Double = {
     1.0 * keywordCount + 0.2 * abstractCount + 0.4 * titleCount
   }
+
+  def hierarchicalKeyworAnalysis(sourceData : RDD[(HierarchyKeyword, Int, Boolean)], corpusMap : Broadcast[Map[Hierarchy, (Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])]],
+                                 hierachyWordcount : Broadcast[Map[Hierarchy, Int]]) : RDD[Row] =
+    sourceData.map((pair: (HierarchyKeyword, Int, Boolean)) => {
+    (pair._1.hierarchy.ApplyID.charAt(0), pair)
+  }).groupByKey() // 依照学科代码进行group
+    .map(pair => {
+      pair._2.toSeq.map(hk => {
+        //(abs : title)
+        val text = corpusMap.value(hk._1.hierarchy)
+        val abs = text._1
+        val title: Map[HierarchyKeyword, Int] = text._2
+        val keyword = hk._1.keyword
+        //
+        val abs_f = abs.getOrElse(hk._1, 0)
+        val title_f = title.getOrElse(hk._1, 0)
+        // keyword, hierarchyKeyword, abstract_f, title_f, keyword_f, isnew
+        (keyword, hk._1, abs_f, title_f, hk._2, hk._3)
+      })
+        .groupBy(f =>  f._1).mapValues(f => {
+        val abs_f_all: Int = f.map(_._3).sum
+        val title_f_all: Int = f.map(_._4).sum
+        val keyword_f_all: Int = f.map(_._5).sum
+        f.map(tu => {
+          //  keyword 1, hierarchyKeyword 2, abstract_f 3, title_f 4, keyword_f 5, absall 6 , titleall 7, keywordall 8, isnew 9
+          (tu._1, tu._2, tu._3, tu._4, tu._5, abs_f_all, title_f_all, keyword_f_all, tu._6)
+        })
+      })
+        .flatMap(f => f._2)
+        .toSeq //return Seq[(String,HierarchyKeyword,Int, Int, Int, Int,Int, Int,Boolean)]
+    }).flatMap(f => f)
+    .map(f => (f._2.hierarchy, (f,weight(f._3,f._4,f._5),
+      if ( (f._6 + f._7 + f._8)  == 0) 0 else (f._3 + f._4 + f._5) / (f._6 + f._7 + f._8))))
+    .groupByKey.map(f => (hierachyWordcount.value.getOrElse(f._1, 0), f._2))
+    .map(pair => comboFilter(pair._1, pair._2))
+    .flatMap(f => f)
+//    .filter(r => r._9 != 0)
+    .map(tu => Row.fromTuple(tu))
+
+  def comboFilter(hCount: Int,
+                  allHK: Iterable[((String, HierarchyKeyword, Int, Int, Int, Int, Int, Int, Boolean), Double, Int)]):
+  Seq[(String, String, String, String, Int, Int, Int, Int, Int)] = {
+    val allHKSeq = allHK.toSeq
+
+    val topNumThirtyP = (hCount * 0.3).toInt + 1
+    val topNumTenP = (hCount * 0.1).toInt + 1
+
+    val allSortedAllHKSeq : Seq[(Boolean, Double, Int, (String, HierarchyKeyword, Int, Int, Int, Int, Int, Int, Boolean))] =
+      allHKSeq.map(f => (keywordFilter(
+      f._1._9,
+      f._3,
+      f._2,
+      f._1._3 + f._1._4 + f._1._5), f._2, f._3,f._1))
+      .sortWith((A, B) => {
+        if (A._1 && B._1) {
+          if (A._2 > B._2) true
+          else if (A._2 < B._2) false
+          else {
+            if (A._3 > B._3) {
+              true
+            } else if (A._3 < B._3){
+              false
+            } else {
+              true
+            }
+          }
+        }
+        else if (A._1) true
+        else if (B._1) false
+        else {
+          if (A._2 > B._2) true
+          else if (A._2 < B._2) false
+          else {
+            if (A._3 > B._3) {
+              true
+            } else if (A._3 < B._3){
+              false
+            } else {
+              if (A._4._1 > B._4._1) true else false
+            }
+          }
+        }
+    })
+
+    val qualifiedHKSize = allSortedAllHKSeq.count(f => f._1)
+    val chosenHK = if (qualifiedHKSize > topNumThirtyP && hCount != 0) { // 多则删除到30%
+      for(i <- 0 until topNumThirtyP withFilter(i => i < allSortedAllHKSeq.size)) yield {
+        allSortedAllHKSeq(i)
+      }
+    } else if (qualifiedHKSize < topNumTenP && hCount != 0) { // 少则增加到10%
+      for(i <- 0 until topNumTenP withFilter(i => i < allSortedAllHKSeq.size)) yield {
+        allSortedAllHKSeq(i)
+      }
+    } else { // 无则处理如果无这个词或者不满足之前的filter
+      allSortedAllHKSeq.filter(f => f._1)
+    }
+
+    val chosenHKret = chosenHK.map(f => f._4).map(f => (
+      f._2.hierarchy.ApplyID, // apply id
+      f._2.hierarchy.FOS, // ros
+      if (f._9) "是" else "去年未采纳", // is new word,  // is new word
+      f._1,  // keyword
+      f._6 + f._7 + f._8, // all keyword's appearance
+      f._3 + f._4 + f._5, // this field keyword's appearance
+      f._8,  // keyword appearance in keyword filed where in this applyid
+      f._5,  // keyword appearance in keyword field where in this ros
+      1
+    ))
+    val upperHK = allSortedAllHKSeq.diff(chosenHK)
+      .filter(s => s._1).map(f => f._4).map(f => (
+      f._2.hierarchy.ApplyID, // apply id
+      f._2.hierarchy.FOS, // ros
+      if (f._9) "是" else "去年未采纳", // is new word,  // is new word
+      f._1,  // keyword
+      f._6 + f._7 + f._8, // all keyword's appearance
+      f._3 + f._4 + f._5, // this field keyword's appearance
+      f._8,  // keyword appearance in keyword filed where in this applyid
+      f._5,  // keyword appearance in keyword field where in this ros
+      -1
+    ))
+
+    val upperHK_2 = allSortedAllHKSeq.diff(chosenHK)
+      .filter(s => !s._1).map(f => f._4).map(f => {
+      val all = f._6 + f._7 + f._8
+      val this_all = f._3 + f._4 + f._5
+      if ((this_all + 0.0) / (all + 0.0) > 0.5 && this_all > 0) {
+        (
+          f._2.hierarchy.ApplyID, // apply id
+          null, // ros
+          if (f._9) "是" else "去年未采纳", // is new word
+          f._1, // keyword
+          f._6 + f._7 + f._8, // all keyword's appearance
+          f._3 + f._4 + f._5, // this field keyword's appearance
+          f._8, // keyword appearance in keyword filed where in this applyid
+          f._5, // keyword appearance in keyword field where in this ros
+          // chosen? true for chosen one else
+          -1
+        )
+      } else {
+        (
+          f._2.hierarchy.ApplyID, // apply id
+          f._2.hierarchy.FOS, // ros
+          if (f._9) "是" else "去年未采纳", // is new word
+          f._1, // keyword
+          f._6 + f._7 + f._8, // all keyword's appearance
+          f._3 + f._4 + f._5, // this field keyword's appearance
+          f._8, // keyword appearance in keyword filed where in this applyid
+          f._5, // keyword appearance in keyword field where in this ros
+          // chosen? true for chosen one else
+          0
+        )
+      }
+    }).filter(s => s._9 != 0)
+    chosenHKret union upperHK union upperHK_2
+//    ++ upperHK
+  }
+
 }

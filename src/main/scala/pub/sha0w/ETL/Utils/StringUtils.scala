@@ -1,5 +1,9 @@
 package pub.sha0w.ETL.Utils
 
+import pub.sha0w.ETL.Objects.HierarchyKeyword
+
+import scala.collection.mutable
+
 object StringUtils {
   /**
     * 100000次运行时间1秒内（i5）
@@ -46,12 +50,50 @@ object StringUtils {
       else Array(str)
     })
   }
-  def main(args: Array[String]): Unit = {
-    val count1 = System.currentTimeMillis()
-    for (i <- 0 to 100000) {
-      countString(testString, "算法")
+
+  def maximumWordCount(keywordList : List[HierarchyKeyword], corpus : String) : Map[HierarchyKeyword, Int] = {
+    val pair = keywordList.map(h => (h, h.keyword.length))
+    val com = pair.sortBy(f => f._2).reverse.map(f => f._1)
+    val map  = new mutable.HashMap[HierarchyKeyword, Int]()
+    var cor: String = corpus
+    for (hk <- com) {
+      val num = countString(cor, hk.keyword)
+      if (num > 0) {
+        map.put(hk,num)
+        cor = cor.replaceAll(hk.keyword.map(c => "[" + {
+          if (c.toString == "\\") "\\\\"
+          else if (c.toString == "(") "\\("
+          else if (c.toString == "[") "\\["
+          else if (c.toString == "^") "\\^"
+          else c.toString
+        } +"]").reduce(_ + _), "<>")
+      }
+//      hk.hierarchy.ApplyID
     }
-    println(System.currentTimeMillis() - count1)
+    map.toMap
+  }
+  def getAllApplyID (code : String) : Seq[String] = {
+    var tmp = ""
+    var i = 1
+
+    val codeLead: String = code.charAt(0).toString
+    var seq = Seq[String](codeLead)
+    while (i < code.length) {
+      tmp += code.substring(i, i + 2)
+      i += 2
+      seq +:= codeLead + tmp
+    }
+    seq
+  }
+  def main(args: Array[String]): Unit = {
+//    val count1 = System.currentTimeMillis()
+//    for (i <- 0 to 100000) {
+//      countString(testString, "算法")
+//    }
+//    println(System.currentTimeMillis() - count1)
+    println(getAllApplyID("A010101"))
+    println(getAllApplyID("A0101"))
+    println(getAllApplyID("A01"))
 
   }
 

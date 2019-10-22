@@ -1,0 +1,8 @@
+A
+AB
+BA
+AD
+CAA
+B
+D
+C
