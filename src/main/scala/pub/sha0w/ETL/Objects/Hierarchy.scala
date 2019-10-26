@@ -12,8 +12,11 @@ package pub.sha0w.ETL.Objects
   * @param FOS
   * @param ApplyID
   */
-class Hierarchy (val FOS: String, val ApplyID : String)extends Serializable {
+class Hierarchy (var FOS: String, val ApplyID : String)extends Serializable {
   assert(ApplyID != null, s"this hierarchy's apply id is null, illegal form, fos is $FOS")
+  if (FOS == "") {
+    FOS = null
+  }
   override def hashCode(): Int = {
     if (FOS == null) ApplyID.hashCode else
     (FOS + ApplyID).hashCode
