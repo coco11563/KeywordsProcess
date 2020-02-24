@@ -123,7 +123,8 @@ object KeywordProcessWithMysql {
       (f._1, f._2.toList.map(str => new HierarchyKeyword(str, f._1) ))
     }).collect().toMap
 
-    val combinationHierarchyKeyworMap : mutable.HashMap[Hierarchy, List[HierarchyKeyword]] = new mutable.HashMap[Hierarchy, List[HierarchyKeyword]]()
+    val combinationHierarchyKeyworMap : mutable.HashMap[Hierarchy, List[HierarchyKeyword]] =
+      new mutable.HashMap[Hierarchy, List[HierarchyKeyword]]()
     for (p <- hierarchyKeywordMap) {
       if (combinationHierarchyKeyworMap.contains(p._1)) {
         val tmp = combinationHierarchyKeyworMap(p._1)

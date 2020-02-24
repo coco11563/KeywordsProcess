@@ -39,7 +39,9 @@ class Hierarchy (var FOS: String, val ApplyID : String)extends Serializable {
   override def clone(): AnyRef = {
     new Hierarchy(FOS, ApplyID)
   }
-
+  def equal_in_aid_head(that : Hierarchy) : Boolean = {
+    this.ApplyID.charAt(0) == that.ApplyID.charAt(0)
+  }
   def isNullAtFos : Boolean ={
     FOS == null
   }
@@ -50,7 +52,7 @@ class Hierarchy (var FOS: String, val ApplyID : String)extends Serializable {
 
 class HierarchyKeyword (val keyword: String, val hierarchy: Hierarchy) extends Serializable {
   override def hashCode(): Int = {
-    if (hierarchy.ApplyID == null) {
+    if (hierarchy.isNullAtFos) {
       (keyword + hierarchy.ApplyID).hashCode
     } else (keyword + hierarchy.FOS + hierarchy.ApplyID).hashCode
   }
