@@ -16,19 +16,20 @@ object OldCsvStatistic {
     ////      println(i)
     ////    }
     ////
-        for (year <- 1998 to args(0).toInt) {
-          process_year(year.toString)
-        }
-  }
-  def process_year(year:String) : Unit = {
-    val spark = SparkSession.builder
-      .getOrCreate()
     val mysqladd = "jdbc:mysql://10.0.202.18:3306/application_processed"
     Class.forName("com.mysql.cj.jdbc.Driver")
     val property = new Properties
     property.put("user","root")
     property.put("password", "")
     property.put("driver","com.mysql.cj.jdbc.Driver")
+        for (year <- args(0).toInt to args(1).toInt) {
+          process_year(year.toString, mysqladd, property)
+        }
+  }
+  def process_year(year:String, mysqladd: String, property: Properties) : Unit = {
+    val spark = SparkSession.builder
+      .getOrCreate()
+
     val newApplication = spark.
       read.
       format("jdbc").
@@ -44,6 +45,7 @@ object OldCsvStatistic {
     })
     val af_split =  newAppRdd.map(line => {
       split_keywords(line._1).map(str =>  (new Hierarchy(line._4, line._3), str))})
+//    hierarchy -> keyword str
     println(s"*****afsplit num is ${af_split.count()}")
     val hierarchyKeywordMap: Map[Hierarchy, List[HierarchyKeyword]] = af_split
       .flatMap(f => f)
@@ -55,13 +57,13 @@ object OldCsvStatistic {
       hierarchyKeywordMap
     )
     println(hierarchyKeywordMap.head._1.toString)
-    println(hierarchyKeywordMap(new Hierarchy("", "H2718")))
-    println(hierarchyKeywordMap(new Hierarchy("", "H2718")).length)
+//    println(hierarchyKeywordMap(new Hierarchy("", "C170106")))
+//    println(hierarchyKeywordMap(new Hierarchy("", "C170106")).length)
     val hierarchyKeywords: RDD[HierarchyKeyword] = af_split
       .flatMap(f => f)
       .map(pair => {
         new HierarchyKeyword(pair._2, pair._1)
-      })
+      }).distinct()
 
     val newAppCorpusMap: Map[Hierarchy, (Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int], Map[HierarchyKeyword, Int])] =
       newAppRdd.map(line => {
@@ -72,7 +74,7 @@ object OldCsvStatistic {
           //abs 1 title 2 keyword 3
           (pair_a._1 + " " + pair_b._1, pair_a._2 + " " + pair_b._2, pair_a._3 + " " + pair_b._3 )
         })
-      }).map(f => {
+      }).filter(f => hierarchyKeywordMapBroadcast.value.contains(f._1)).map(f => { //有一些关键词为“”，故不会载入到keyword map中
         val keys = hierarchyKeywordMapBroadcast.value(f._1)
         (f._1, (
           StringUtils.maximumWordCount(keys, f._2._1),
@@ -96,6 +98,7 @@ object OldCsvStatistic {
       .write.
       mode(SaveMode.Overwrite)
       .jdbc(mysqladd, s"${year}_keyword_count_old", property)
+
   }
 
   def check_most(string: String) : String = {
