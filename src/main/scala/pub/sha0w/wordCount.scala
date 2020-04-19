@@ -15,23 +15,24 @@ import pub.sha0w.ETL.Utils.StringUtils
 import scala.collection.mutable
 
 object wordCount {
-  val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+//  val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+  val mysqladd = "jdbc:mysql://10.0.82.237:3306/application_process"
   Class.forName("com.mysql.cj.jdbc.Driver")
   val property = new Properties
   property.put("user","root")
-  property.put("password", "Bigdata,1234")
+  property.put("password", "xiaomenG789O_")
   property.put("driver","com.mysql.cj.jdbc.Driver")
 
   val conn = new DriverConnectionFactory(new Driver(), mysqladd, property).createConnection()
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder
       .getOrCreate()
-    val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
-    Class.forName("com.mysql.cj.jdbc.Driver")
-    val property = new Properties
-    property.put("user","root")
-    property.put("password", "Bigdata,1234")
-    property.put("driver","com.mysql.cj.jdbc.Driver")
+//    val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+//    Class.forName("com.mysql.cj.jdbc.Driver")
+//    val property = new Properties
+//    property.put("user","root")
+//    property.put("password", "Bigdata,1234")
+//    property.put("driver","com.mysql.cj.jdbc.Driver")
     val newApplication = spark.
       read.
       format("jdbc").
@@ -62,11 +63,11 @@ object wordCount {
     val newAppschema = newApplication.schema
     //得到并解析今年的关键字
     val newAppRdd = newApplication.rdd.map(r => {
-      (r.getAs[String](fieldIndex(newAppschema,"keyword_zh".toUpperCase)),
-        r.getAs[String](fieldIndex(newAppschema,"title_zh".toUpperCase)),
-        r.getAs[String](fieldIndex(newAppschema,"applyid".toUpperCase)),
-        r.getAs[String](fieldIndex(newAppschema,"research_field".toUpperCase)),
-        r.getAs[String](fieldIndex(newAppschema,"abstract_zh".toUpperCase)))
+      (r.getAs[String](fieldIndex(newAppschema,"zh_keyword")),
+        r.getAs[String](fieldIndex(newAppschema,"zh_title")),
+        r.getAs[String](fieldIndex(newAppschema,"apply_id")),
+        r.getAs[String](fieldIndex(newAppschema,"research_field")),
+        r.getAs[String](fieldIndex(newAppschema,"zh_abstract")))
     }).filter(tu => {
       tu._1 != null  && tu._3 != null //存在中文关键字
     })
@@ -201,14 +202,5 @@ object wordCount {
           .flatMap(f => f._2)
           .toSeq //return Seq[(String,HierarchyKeyword,Int, Int, Int, Int,Int, Int,Boolean)]
       }).flatMap(f => f)
-  }
-
-  def process(year : String) : Unit = {
-    val ps = conn.prepareStatement(s"select KEYWORD_ZH,RESEARCH_FIELD,APPLYID,TITLE_ZH from ${year}_APPLICATION_NEW;")
-    val rs = ps.executeQuery()
-    val map = new mutable.HashMap[Hierarchy, String]
-    while(rs.next()) {
-
-    }
   }
 }

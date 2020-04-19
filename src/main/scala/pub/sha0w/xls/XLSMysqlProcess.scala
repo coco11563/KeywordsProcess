@@ -46,13 +46,20 @@ object XLSMysqlProcess {
 
     val spark = SparkSession.builder
       .getOrCreate()
-    val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+//    val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+//    Class.forName("com.mysql.cj.jdbc.Driver")
+//    val property = new Properties
+//    property.put("user","root")
+//    property.put("password", "Bigdata,1234")
+//    property.put("driver","com.mysql.cj.jdbc.Driver")
+
+
+    val mysqladd = "jdbc:mysql://10.0.82.237:3306/application_process"
     Class.forName("com.mysql.cj.jdbc.Driver")
     val property = new Properties
     property.put("user","root")
-    property.put("password", "Bigdata,1234")
+    property.put("password", "xiaomenG789O_")
     property.put("driver","com.mysql.cj.jdbc.Driver")
-
     val result_schema = StructType(Array(StructField("APPLYID",StringType, nullable = true),
       StructField("RESEARCH_FIELD",StringType, nullable = true),
       StructField("KEYWORD",StringType, nullable = false)))

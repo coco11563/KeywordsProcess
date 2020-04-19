@@ -15,14 +15,14 @@ object OldCsvProcess {
   def main(args: Array[String]): Unit = {
     val spark = SparkSession.builder
       .getOrCreate()
-    val mysqladd = "jdbc:mysql://10.0.202.18:3306/application_processed"
+    val mysqladd = "jdbc:mysql://10.0.82.237:3306/application_process?useUnicode=true&characterEncoding=utf8&autoReconnect=true&failOverReadOnly=false"
     Class.forName("com.mysql.cj.jdbc.Driver")
     val property = new Properties
     property.put("user","root")
-    property.put("password", "")
+    property.put("password", "xiaomenG789O_")
     property.put("driver","com.mysql.cj.jdbc.Driver")
 
-    val base_file = "/root/old_application"
+    val base_file = "/root/xm_tmp"
     //    subject_code1	zh_title	en_title	ckeyword	csummary
     val csv_schema = StructType(Array(
       StructField("applyid",StringType, nullable = false),

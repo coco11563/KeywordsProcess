@@ -16,11 +16,11 @@ object OldCsvStatistic {
     ////      println(i)
     ////    }
     ////
-    val mysqladd = "jdbc:mysql://10.0.202.18:3306/application_processed"
+    val mysqladd = "jdbc:mysql://10.0.82.237:3306/application_process?useUnicode=true&characterEncoding=utf8&autoReconnect=true&failOverReadOnly=false "
     Class.forName("com.mysql.cj.jdbc.Driver")
     val property = new Properties
     property.put("user","root")
-    property.put("password", "")
+    property.put("password", "xiaomenG789O_")
     property.put("driver","com.mysql.cj.jdbc.Driver")
         for (year <- args(0).toInt to args(1).toInt) {
           process_year(year.toString, mysqladd, property)
@@ -44,7 +44,7 @@ object OldCsvStatistic {
         r.getAs[String](fieldIndex(newAppschema,"abstract")))
     })
     val af_split =  newAppRdd.map(line => {
-      split_keywords(line._1).map(str =>  (new Hierarchy(line._4, line._3), str))})
+      split_keywords(line._1).map(str =>  (new Hierarchy(line._4, line._3), str.replace(".", "").replace(";", "")))})
 //    hierarchy -> keyword str
     println(s"*****afsplit num is ${af_split.count()}")
     val hierarchyKeywordMap: Map[Hierarchy, List[HierarchyKeyword]] = af_split

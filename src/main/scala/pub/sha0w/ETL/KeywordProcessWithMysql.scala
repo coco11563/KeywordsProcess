@@ -28,7 +28,8 @@ object KeywordProcessWithMysql {
 
     val spark = SparkSession.builder
       .getOrCreate()
-    val mysqladd = "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+//    "jdbc:mysql://192.168.3.131:3306/NSFC_KEYWOR_DB"
+    val mysqladd = args(3)
     Class.forName("com.mysql.cj.jdbc.Driver")
     val property = new Properties
     property.put("user","root")
